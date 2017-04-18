@@ -1,19 +1,13 @@
 <?php
-
 require_once 'TelegramBot.php';
-
 class PollBot extends TelegramBot {
-
   public $redis = false;
-
   protected static $REDIS_HOST = '127.0.0.1';
   protected static $REDIS_PORT = 6379;
-
   public function init() {
     parent::init();
     $this->dbInit();
   }
-
   public function dbInit() {
     if (!$this->redis) {
       $this->redis = new Redis();
@@ -24,25 +18,17 @@ class PollBot extends TelegramBot {
     }
   }
 }
-
 class PollBotChat extends TelegramBotChat {
-
   protected $redis;
-
   protected $curPoll = false;
   protected static $optionsLimit = 10;
-
   public function __construct($core, $chat_id) {
     parent::__construct($core, $chat_id);
     $this->redis = $this->core->redis;
   }
-
   public function init() {
     $this->curPoll = $this->dbGetPoll();
   }
-
-
-
   public function command_start($params, $message) {
     if (!$this->isGroup) {
       $this->command_newpoll('', $message);
@@ -62,7 +48,6 @@ class PollBotChat extends TelegramBotChat {
       }
     }
   }
-
   public function command_newpoll($params, $message) {
     if ($this->curPoll && $this->isGroup) {
       if ($this->isGroup) {
@@ -73,14 +58,11 @@ class PollBotChat extends TelegramBotChat {
         $this->curPoll = false;
       }
     }
-
     $author_id = $message['from']['id'];
     $message_id = $message['message_id'];
     $newpoll = $this->parsePollParams($params);
-
     $has_title = strlen($newpoll['title']) > 0;
     $has_options = count($newpoll['options']) > 0;
-
     if ($has_title && $has_options) {
       $this->createPoll($author_id, $newpoll);
     } else if ($has_title) {
@@ -89,7 +71,6 @@ class PollBotChat extends TelegramBotChat {
       $this->needPollTitle($author_id, $message_id);
     }
   }
-
   public function command_poll($params, $message) {
     if (!$this->isGroup) {
       return $this->sendGroupOnly();
@@ -97,10 +78,8 @@ class PollBotChat extends TelegramBotChat {
     if (!$this->curPoll) {
       return $this->sendNoPoll();
     }
-
     $this->sendPoll(true, $message['message_id']);
   }
-
   public function command_results($params, $message) {
     if (!$this->isGroup) {
       return $this->sendGroupOnly();
@@ -108,10 +87,8 @@ class PollBotChat extends TelegramBotChat {
     if (!$this->curPoll) {
       return $this->sendNoPoll();
     }
-
     $this->sendResults();
   }
-
   public function command_endpoll($params, $message) {
     if (!$this->isGroup) {
       return $this->sendGroupOnly();
@@ -119,13 +96,10 @@ class PollBotChat extends TelegramBotChat {
     if (!$this->curPoll) {
       return $this->sendNoPoll();
     }
-
     $this->sendResults(true);
-
     $this->dbDropPoll();
     $this->curPoll = false;
   }
-
   public function command_done($params, $message) {
     $author_id = $message['from']['id'];
     $newpoll = $this->dbGetPollCreating($author_id);
@@ -138,15 +112,12 @@ class PollBotChat extends TelegramBotChat {
       $this->donePollCreating($author_id, $newpoll, $message['message_id']);
     }
   }
-
   public function command_help($params, $message) {
     $this->sendHelp();
   }
-
   public function bot_added_to_chat($message) {
     $this->sendHelp();
   }
-
   public function some_command($command, $params, $message) {
     $option_num = intval($command);
     if ($option_num > 0) {
@@ -156,7 +127,6 @@ class PollBotChat extends TelegramBotChat {
       if (!$this->curPoll) {
         return $this->sendNoPoll();
       }
-
       $option_id = $option_num - 1;
       $options_count = count($this->curPoll['options']);
       if ($option_id >= 0 && $option_id < $options_count) {
@@ -166,7 +136,6 @@ class PollBotChat extends TelegramBotChat {
       $this->sendHelp();
     }
   }
-
   public function message($text, $message) {
     if ($this->curPoll && $this->isGroup) {
       $option = trim($text);
@@ -213,35 +182,27 @@ class PollBotChat extends TelegramBotChat {
       }
     }
   }
-
-
-
   protected function parsePollParams($params) {
     $params = explode("\n", $params);
     $params = array_map('trim', $params);
     $params = array_filter($params);
     $params = array_unique($params);
-
     $title = array_shift($params);
     $title = mb_substr($title, 0, 1024, 'UTF-8');
-
     $options = array_slice($params, 0, self::$optionsLimit);
     foreach ($options as &$option) {
       $option = mb_substr($option, 0, 256, 'UTF-8');
     }
-
     return array(
       'title' => $title,
       'options' => $options,
     );
   }
-
   protected function needPollTitle($author_id, $message_id) {
     $newpoll = array(
       'state' => 'need_title',
     );
     $this->dbSavePollCreating($author_id, $newpoll);
-
     $text = "Let's create a new poll. First, send me the question.";
     if ($this->isGroup) {
       $params = array(
@@ -260,14 +221,12 @@ class PollBotChat extends TelegramBotChat {
     }
     $this->apiSendMessage($text, $params);
   }
-
   protected function needPollOptions($author_id, $newpoll, $message_id) {
     if (!isset($newpoll['options'])) {
       $newpoll['options'] = array();
     }
     $newpoll['state'] = 'need_options';
     $this->dbSavePollCreating($author_id, $newpoll);
-
     if (count($newpoll['options']) > 0) {
       $text = "Good. Now send me another answer option.\n\nWhen you've added enough options, simply send /done to publish the poll.";
     } else {
@@ -290,11 +249,9 @@ class PollBotChat extends TelegramBotChat {
     }
     $this->apiSendMessage($text, $params);
   }
-
   protected function donePollCreating($author_id, $newpoll, $message_id = 0) {
     $has_title = strlen($newpoll['title']) > 0;
     $has_options = count($newpoll['options']) > 0;
-
     if ($has_title && $has_options) {
       $this->createPoll($author_id, $newpoll);
     } else {
@@ -302,14 +259,12 @@ class PollBotChat extends TelegramBotChat {
       $this->apiSendMessage("Sorry, a poll needs to have a question and at least one answer option to work. Send /newpoll to try again.");
     }
   }
-
   protected function createPoll($author_id, $newpoll) {
     $poll = array(
       'title' => $newpoll['title'],
       'options' => $newpoll['options'],
       'author_id' => $author_id,
     );
-
     if ($this->isGroup) {
       $this->dbSavePoll($poll);
       $this->curPoll = $poll;
@@ -319,14 +274,12 @@ class PollBotChat extends TelegramBotChat {
       $poll = $this->dbSavePollById($poll);
       $this->dbDropPollCreating($author_id);
     }
-
     $this->sendPollCreated($poll);
   }
-
   protected function pollNewVote($voter, $option_id, $message_id = 0) {
     $chat_id = $this->chatId;
     $voter_id = $voter['id'];
-
+	$voter_sta = $this->apigetChatMember($voter_id);   // Conejo necesito pedir el status del usuario en el chat con la api de Telegram getChatMember ($chat_id,$voter_id)
     $message_params = array(
       'reply_markup' => array(
         'hide_keyboard' => true,
@@ -339,13 +292,12 @@ class PollBotChat extends TelegramBotChat {
       $name = $voter['first_name'];
       $message_params['reply_to_message_id'] = $message_id;
     }
-
     $option = $this->curPoll['options'][$option_id];
     $already_voted = $this->dbCheckOption($voter_id, $option_id);
     if ($already_voted) {
       $text = "☝️{$name} is still for '{$option}'.";
     } else {
-      $new_vote = $this->dbSelectOption($voter_id, $option_id);
+      $new_vote = $this->dbSelectOption($voter_id, $option_id, $voter_sta['status']);   // Conejo le añadimos el status al del votante
       if ($new_vote) {
         $text = "☝️{$name} voted for '{$option}'.";
       } else {
@@ -353,12 +305,8 @@ class PollBotChat extends TelegramBotChat {
       }
     }
     $text .= "\n/results - show results\n/poll - repeat the question";
-
     $this->apiSendMessage($text, $message_params);
   }
-
-
-
   protected function getPollText($poll, $plain = false) {
     $text = $poll['title']."\n";
     foreach ($poll['options'] as $i => $option) {
@@ -370,7 +318,6 @@ class PollBotChat extends TelegramBotChat {
     }
     return $text;
   }
-
   protected function getPollKeyboard() {
     $keyboard = array();
     foreach ($this->curPoll['options'] as $option) {
@@ -378,14 +325,10 @@ class PollBotChat extends TelegramBotChat {
     }
     return $keyboard;
   }
-
   protected function getPollLink($poll_id) {
     $username = strtolower($this->core->botUsername);
     return "telegram.me/{$username}?startgroup={$poll_id}";
   }
-
-
-
   protected function dbGetPoll() {
     $poll_str = $this->redis->get('c'.$this->chatId.':poll');
     if (!$poll_str) {
@@ -393,12 +336,10 @@ class PollBotChat extends TelegramBotChat {
     }
     return json_decode($poll_str, true);
   }
-
   protected function dbSavePoll($poll) {
     $poll_str = json_encode($poll);
     $this->redis->set('c'.$this->chatId.':poll', $poll_str);
   }
-
   protected function dbGetPollById($poll_id) {
     $poll_str = $this->redis->get('poll:'.$poll_id);
     if (!$poll_str) {
@@ -406,7 +347,6 @@ class PollBotChat extends TelegramBotChat {
     }
     return json_decode($poll_str, true);
   }
-
   protected function dbSavePollById($poll) {
     $poll_str = json_encode($poll);
     $tries = 0;
@@ -417,11 +357,9 @@ class PollBotChat extends TelegramBotChat {
         break;
       }
     } while (++$tries < 100);
-
     $poll['id'] = $poll_id;
     return $poll;
   }
-
   protected function dbDropPoll() {
     $keys = array(
       'c'.$this->chatId.':poll',
@@ -432,64 +370,51 @@ class PollBotChat extends TelegramBotChat {
     }
     $this->redis->delete($keys);
   }
-
   protected function dbCheckOption($voter_id, $option_id) {
     $chat_id = $this->chatId;
     return $this->redis->sIsMember('c'.$chat_id.':o'.$option_id.':members', $voter_id);
   }
-
   protected function dbSavePollCreating($author_id, $poll) {
     $chat_id = $this->chatId;
     $this->redis->set("newpoll{$chat_id}:{$author_id}", json_encode($poll));
   }
-
   protected function dbGetPollCreating($author_id) {
     $chat_id = $this->chatId;
     $poll = json_decode($this->redis->get("newpoll{$chat_id}:{$author_id}"), true);
     return $poll;
   }
-
   protected function dbDropPollCreating($author_id) {
     $chat_id = $this->chatId;
     return $this->redis->delete("newpoll{$chat_id}:{$author_id}");
   }
-
-  protected function dbSelectOption($voter_id, $option_id) {
+  protected function dbSelectOption($voter_id, $option_id, $voter_sta) {         // Conejo le añadimos el status al del votante
     $chat_id = $this->chatId;
     $redis = $this->redis->multi();
-    $redis->sAdd('c'.$chat_id.':members', $voter_id);
-
+    $redis->sAdd('c'.$chat_id.':members', $voter_id);   // recuento de quien ha votado
     $options_count = count($this->curPoll['options']);
     for ($i = 0; $i < $options_count; $i++) {
       if ($i == $option_id) {
-        $redis->sAdd('c'.$chat_id.':o'.$i.':members', $voter_id);
+        $redis->sAdd('c'.$chat_id.':o'.$i.':status'.$voter_sta.':members', $voter_id);   // suma el voto tenemos que añadir el status del votante       
       } else {
-        $redis->sRem('c'.$chat_id.':o'.$i.':members', $voter_id);
+        $redis->sRem('c'.$chat_id.':o'.$i.':status'.$voter_sta.':members', $voter_id);  // quita el voto por si cambia de elección
       }
     }
     $result = $redis->exec();
     $added = array_shift($result);
     return $added;
   }
-
-
-
   protected function sendGreeting() {
     $this->apiSendMessage("To create a new poll, send me a message exactly in this format:\n\n/newpoll\nYour question\nAnswer option 1\nAnswer option 2\n...\nAnswer option x");
   }
-
   protected function sendGroupOnly() {
     $this->apiSendMessage("This command will work in those of your groups that have an active poll. Use /newpoll to create a poll.");
   }
-
   protected function sendNoPoll() {
     $this->apiSendMessage("No active polls in this group. Use /newpoll to create a poll first.");
   }
-
   protected function sendOnePollOnly() {
     $this->apiSendMessage("Sorry, only one poll at a time is allowed.\n/poll - repeat the question\n/endpoll - close current poll");
   }
-
   protected function sendHelp() {
     if ($this->isGroup) {
       $text = "This bot can create simple polls in groups.";
@@ -499,7 +424,6 @@ class PollBotChat extends TelegramBotChat {
     $text .= "\n\n/newpoll - create a poll\n/results - see how the poll is going\n/poll - repeat the question\n/endpoll - close poll and show final results";
     $this->apiSendMessage($text);
   }
-
   public function sendPoll($resend = false, $message_id = 0) {
     $text = $this->getPollText($this->curPoll);
     if ($this->isGroup) {
@@ -516,7 +440,6 @@ class PollBotChat extends TelegramBotChat {
     }
     $this->apiSendMessage($text, $message_params);
   }
-
   protected function sendPollCreated($poll) {
     $text = "👍 Poll created.";
     if (!$this->isGroup) {
@@ -526,64 +449,67 @@ class PollBotChat extends TelegramBotChat {
       $text .= $this->getPollText($poll, true);
     }
     $this->apiSendMessage($text);
-
     if ($this->isGroup) {
       $this->sendPoll();
     }
   }
-
   protected function sendResults($final = false) {
     $results = array();
-    $total_value = 0;
+	$total_value = 0;
+    $total_value_adm = 0;
+	$total_value_mem = 0;
     $max_value = 0;
+	$num_mem = apigetChatMembersCount ($this->chatId); //para obtener el numero de participantes members en el chat, es decir el censo hay que verificar si cuenta a los bots
+    $num_adm = getChatAdministrators ($this->chatId); // para obtener el numero de representantes administratos
     foreach ($this->curPoll['options'] as $i => $option) {
-      $value = intval($this->redis->sCard('c'.$this->chatId.':o'.$i.':members'));
-      $total_value += $value;
+      $value_adm = intval($this->redis->sCard('c'.$chat_id.':o'.$i.':status'.'administrator'.':members'));  // devuelve el numero de elementos en este caso de administradores, representantes, que han votado esta opcion
+      $value_mem = intval($this->redis->sCard('c'.$chat_id.':o'.$i.':status'.'member'.':members'));  // devuelve el numero de elementos en este caso de member, representados, que han votado esta opcion
+	  $total_value_adm += $value_adm;  //numero de administradores que han votado  
+	  $total_value_mem += $value_mem;   //numero de miembros que han votado 
       $max_value = max($max_value, $value);
       $results[] = array(
         'label' => $option,
-        'value' => $value,
+        'value_adm' => $value_adm,
+		'value_mem' => $value_mem,
       );
     }
+	$Peso_adm = ($num_mem-$value_mem)/$num_adm;  // ponderacion del voto de los administradores
+	$total_value = $total_value_mem +  $total_value_adm * $Peso_adm;
+	
+	
     foreach ($results as &$result) {
-      $result['pc'] = $max_value ? round($result['value'] * 7 / $max_value) : 0;
-      $result['procent'] = $total_value ? round($result['value'] * 100 / $total_value) : 0;
+     // $result['pc'] = $max_value ? round($result['value'] * 7 / $max_value) : 0;  // esto es para que como maximo salgan 7 puños de ok
+     // $result['procent'] = $total_value ? round($result['value'] * 100 / $total_value) : 0;
+	    $result['procent'] = $total_value ? round(($result['value_mem']+ ($Peso_adm*$result['value_adm'])) * 100 / $total_value,2) : 0;
     }
     uasort($results, function($a, $b) { return ($b['value'] - $a['value']); });
-
     $text = '';
     if ($final) {
       $text .= "📊 Poll closed, final results:\n\n";
     }
     $text .= $this->curPoll['title']."\n";
-    if (!$total_value) {
-      $text .= "👥 Nobody";
-    } else if ($total_value == 1) {
-      $text .= "👥 1 person";
-    } else {
-      $text .= "👥 {$total_value} people";
-    }
+    
+    $text .= "👥 {$total_value_adm} representantes y {$total_value_mem} personas";
+    
     if ($final) {
-      $text .= " voted in total.";
+      $text .= " han votado en total.";
     } else {
-      $text .= " voted so far.";
+      $text .= " han votado hasta el momento.";
     }
     foreach ($results as &$result) {
       $text .= "\n\n{$result['label']} – {$result['value']}\n";
-      $text .= ($result['pc'] ? str_repeat('👍', $result['pc']) : '▫️');
+     // $text .= ($result['pc'] ? str_repeat('👍', $result['pc']) : '▫️');
       $text .= " {$result['procent']}%";
     }
     if (!$final) {
-      $text .= "\n\n/poll - repeat question\n/endpoll - close poll";
+      $text .= "\n\n/poll - repetir la pregunta\n/endpoll - finalizar la encuesta";
     }
-
     $message_params = array();
     if ($final) {
       $message_params['reply_markup'] = array(
         'hide_keyboard' => true,
       );
     }
-
     $this->apiSendMessage($text, $message_params);
   }
 }
